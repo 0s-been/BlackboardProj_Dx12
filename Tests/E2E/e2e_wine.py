@@ -408,6 +408,18 @@ def main():
     alive = proc.poll() is None
     record("TC23", "선 200개 연속 그리기 후 정상 동작", alive, f"{elapsed:.1f}s")
 
+    # TC25 확인용 그림(Samples/test_drawing.board) 불러오기 -> 기대 화면과 픽셀 단위로 동일
+    samples = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Samples"))
+    click(UI["load"], wait=0.2)
+    file_dialog("Z:" + os.path.join(samples, "test_drawing.board").replace("/", "\\"))
+    img = shot("tc25_sample_load")
+    expected = Image.open(os.path.join(samples, "test_drawing_expected.png")).convert("RGB")
+    x0, y0 = 420, 18   # 그림이 그려진 위치 (클라이언트 좌표)
+    diff = sum(1 for y in range(expected.height) for x in range(expected.width)
+               if not near(img.getpixel((x0 + x, y0 + y)), expected.getpixel((x, y)), 1))
+    record("TC25", "확인용 그림 불러오기 -> 기대 화면과 동일", diff == 0 and near(img.getpixel((1100, 400)), BG["white"]),
+           f"다른픽셀={diff}/{expected.width * expected.height}")
+
     alive = proc.poll() is None
     record("TC24", "전체 테스트 동안 프로그램 종료/크래시 없음", alive)
 

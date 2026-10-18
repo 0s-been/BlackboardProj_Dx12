@@ -144,6 +144,9 @@ void App::HandleBoardInput()
         }
         else
         {
+            // 마지막 이동과 버튼 떼기가 같은 프레임에 들어올 수 있으므로 뗀 위치까지 넣고 끝낸다.
+            if (ImGui::IsMousePosValid())
+                m_board.ContinueStroke(mouse);
             m_board.EndStroke();
         }
         return;

@@ -269,6 +269,52 @@ void TestCorruptFiles()
     Check(!board.LoadFromFile(p) && unchanged(), "U25", "좌표/색에 NaN이 있는 파일 -> 실패");
 }
 
+// 프로젝트에 포함된 확인용 그림(Samples/test_drawing.board) 저장/불러오기
+void TestSampleDrawing()
+{
+    // 실행 위치(Tests 폴더, 솔루션 폴더, Bin 폴더)에 따라 경로를 찾는다
+    const wchar_t* candidates[] = { L"../Samples/test_drawing.board", L"Samples/test_drawing.board",
+                                    L"../../Samples/test_drawing.board" };
+    std::wstring sample;
+    for (const wchar_t* c : candidates)
+        if (std::filesystem::exists(c))
+        {
+            sample = c;
+            break;
+        }
+    if (sample.empty())
+    {
+        Check(false, "S01", "확인용 그림 파일(Samples/test_drawing.board)을 찾음");
+        return;
+    }
+
+    Blackboard board;
+    bool loaded = board.LoadFromFile(sample);
+    size_t points = 0;
+    for (const Stroke& s : board.GetStrokes())
+        points += s.points.size();
+    std::printf("         (확인용 그림: 선 %zu개, 점 %zu개, 배경 %d)\n", board.GetStrokes().size(), points,
+                (int)board.GetBackground());
+    Check(loaded && board.GetStrokes().size() > 1000 && board.GetBackground() == BoardBackground::White, "S01",
+          "확인용 그림 불러오기 (선 1000개 이상, 흰색 배경)");
+
+    // 불러온 그림을 다시 저장하면 원본 파일과 바이트 단위로 같아야 한다
+    std::wstring resaved = TempPath(L"ut_resaved.board");
+    board.SaveToFile(resaved);
+    auto readAll = [](const std::wstring& path) {
+        std::ifstream in(std::filesystem::path(path), std::ios::binary);
+        return std::vector<char>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    };
+    std::vector<char> a = readAll(sample);
+    std::vector<char> b = readAll(resaved);
+    Check(!a.empty() && a == b, "S02", "확인용 그림 불러오기 -> 다시 저장 시 원본과 바이트 단위로 동일");
+
+    StrokeRenderer r;
+    size_t vertices = StrokeRendererTestAccess::Build(r, board);
+    std::printf("         (확인용 그림 정점 %zu개)\n", vertices);
+    Check(vertices > 0, "S03", "확인용 그림 정점 생성");
+}
+
 // ---------------------------------------------------------------- StrokeRenderer
 void TestGeometry()
 {
@@ -385,6 +431,7 @@ int main()
     TestBackground();
     TestSaveLoad();
     TestCorruptFiles();
+    TestSampleDrawing();
     std::printf("=== StrokeRenderer (정점 생성) ===\n");
     TestGeometry();
 

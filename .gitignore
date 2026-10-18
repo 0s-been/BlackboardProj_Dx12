@@ -5,3 +5,4 @@ x64/
 *.user
 *.board
 imgui.ini
+!Samples/*.board
