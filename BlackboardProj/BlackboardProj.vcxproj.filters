@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="App">
+      <UniqueIdentifier>{6B1F6E0A-1C3E-4E8B-9C4A-1A2B3C4D5E01}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{6B1F6E0A-1C3E-4E8B-9C4A-1A2B3C4D5E02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Board">
+      <UniqueIdentifier>{6B1F6E0A-1C3E-4E8B-9C4A-1A2B3C4D5E03}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{6B1F6E0A-1C3E-4E8B-9C4A-1A2B3C4D5E04}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\imgui">
+      <UniqueIdentifier>{6B1F6E0A-1C3E-4E8B-9C4A-1A2B3C4D5E05}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source\Main.cpp"><Filter>App</Filter></ClCompile>
+    <ClCompile Include="Source\App.cpp"><Filter>App</Filter></ClCompile>
+    <ClCompile Include="Source\Core\Dx12Core.cpp"><Filter>Core</Filter></ClCompile>
+    <ClCompile Include="Source\Board\Blackboard.cpp"><Filter>Board</Filter></ClCompile>
+    <ClCompile Include="Source\Board\StrokeRenderer.cpp"><Filter>Board</Filter></ClCompile>
+    <ClCompile Include="Source\UI\UIManager.cpp"><Filter>UI</Filter></ClCompile>
+    <ClCompile Include="External\imgui\imgui.cpp"><Filter>External\imgui</Filter></ClCompile>
+    <ClCompile Include="External\imgui\imgui_demo.cpp"><Filter>External\imgui</Filter></ClCompile>
+    <ClCompile Include="External\imgui\imgui_draw.cpp"><Filter>External\imgui</Filter></ClCompile>
+    <ClCompile Include="External\imgui\imgui_tables.cpp"><Filter>External\imgui</Filter></ClCompile>
+    <ClCompile Include="External\imgui\imgui_widgets.cpp"><Filter>External\imgui</Filter></ClCompile>
+    <ClCompile Include="External\imgui\backends\imgui_impl_dx12.cpp"><Filter>External\imgui</Filter></ClCompile>
+    <ClCompile Include="External\imgui\backends\imgui_impl_win32.cpp"><Filter>External\imgui</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Source\App.h"><Filter>App</Filter></ClInclude>
+    <ClInclude Include="Source\Core\Dx12Core.h"><Filter>Core</Filter></ClInclude>
+    <ClInclude Include="Source\Board\Blackboard.h"><Filter>Board</Filter></ClInclude>
+    <ClInclude Include="Source\Board\StrokeRenderer.h"><Filter>Board</Filter></ClInclude>
+    <ClInclude Include="Source\UI\UIManager.h"><Filter>UI</Filter></ClInclude>
+    <ClInclude Include="External\imgui\imconfig.h"><Filter>External\imgui</Filter></ClInclude>
+    <ClInclude Include="External\imgui\imgui.h"><Filter>External\imgui</Filter></ClInclude>
+    <ClInclude Include="External\imgui\imgui_internal.h"><Filter>External\imgui</Filter></ClInclude>
+    <ClInclude Include="External\imgui\backends\imgui_impl_dx12.h"><Filter>External\imgui</Filter></ClInclude>
+    <ClInclude Include="External\imgui\backends\imgui_impl_win32.h"><Filter>External\imgui</Filter></ClInclude>
+  </ItemGroup>
+</Project>

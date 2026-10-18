@@ -1,0 +1,7 @@
+.vs/
+Bin/
+Intermediate/
+x64/
+*.user
+*.board
+imgui.ini
