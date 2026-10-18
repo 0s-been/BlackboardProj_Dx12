@@ -422,5 +422,5 @@ sequenceDiagram
 
 - Visual Studio 2022 프로젝트(`BlackboardProj.sln`, x64 Debug/Release)로 구성했습니다.
 - 작성 환경(Linux)에서 MinGW-w64 크로스 컴파일러로 모든 소스를 컴파일·링크해 문법과 링크 오류가 없는 것을 확인했습니다.
-- 단위 테스트(`Tests/UnitTests.cpp`, 35개)와 화면 조작 E2E 테스트(24개)를 Wine + vkd3d(소프트웨어 Vulkan)에서 실행해 확인했습니다. 자세한 결과는 [QA 보고서](QA_Report.md)에 있습니다.
+- 단위 테스트와 화면 조작 E2E 테스트를 Wine + vkd3d(소프트웨어 Vulkan)에서 실행해 확인했습니다. 자세한 결과는 [QA 보고서](QA_Report.md)에 있습니다. (테스트 코드는 QA를 마친 뒤 프로젝트에서 삭제했습니다.)
 - 실제 Windows + GPU 환경에서의 최종 확인은 Visual Studio에서 빌드해 진행해야 합니다.

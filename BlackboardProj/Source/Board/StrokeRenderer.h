@@ -18,8 +18,6 @@ public:
     void Draw(ID3D12GraphicsCommandList* commandList, const Blackboard& board, float screenWidth, float screenHeight);
 
 private:
-    friend struct StrokeRendererTestAccess;   // 단위 테스트에서 정점 생성 결과를 확인하기 위함
-
     struct Vertex
     {
         float x, y;         // 화면 픽셀 좌표

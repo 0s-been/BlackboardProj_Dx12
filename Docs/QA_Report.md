@@ -24,10 +24,9 @@
 
 **한계**: 실제 Windows와 실제 GPU가 아니라 호환 계층에서 실행했습니다. D3D12 디버그 레이어는 Wine에서 지원되지 않아 Vulkan 검증 레이어로 대신했습니다. 그래서 7장의 항목은 Windows PC에서 한 번 더 확인해야 합니다.
 
-### 테스트 실행 방법
+### 테스트 코드
 
-- **단위 테스트 (Windows)**: `BlackboardProj.sln` → `UnitTests` 프로젝트를 시작 프로젝트로 설정하고 실행합니다. 실패하면 종료 코드가 1입니다.
-- **E2E (Linux + Wine)**: `python3 Tests/E2E/e2e_wine.py <BlackboardProj.exe> <결과폴더>`. 결과 폴더에 단계별 화면 캡처와 `e2e_results.txt`가 남습니다.
+QA에 쓴 테스트 코드(`Tests/UnitTests.cpp`, `Tests/UnitTests.vcxproj`, `Tests/E2E/e2e_wine.py`)는 QA를 마친 뒤 프로젝트에서 삭제했습니다. 이 보고서는 그 실행 결과의 기록입니다. 필요하면 git 기록에서 복구할 수 있습니다(테스트가 포함된 마지막 커밋: `6f63c69`).
 
 ## 3. 발견한 결함과 조치
 
@@ -48,7 +47,7 @@
 
 ## 4. 테스트 케이스와 결과
 
-### 4.1 단위 테스트 (`Tests/UnitTests.cpp`)
+### 4.1 단위 테스트 (`Tests/UnitTests.cpp`, 삭제됨)
 
 | ID | 내용 | 최종 |
 |---|---|---|
@@ -91,7 +90,7 @@
 | S02 | 확인용 그림을 불러와 다시 저장하면 원본과 바이트 단위로 동일 | 추가 / **PASS** |
 | S03 | 확인용 그림 정점 생성 (정점 272,406개) | 추가 / **PASS** |
 
-### 4.2 E2E 화면 조작 테스트 (`Tests/E2E/e2e_wine.py`)
+### 4.2 E2E 화면 조작 테스트 (`Tests/E2E/e2e_wine.py`, 삭제됨)
 
 | ID | 시나리오 | 판정 기준 | 1차 | 최종 |
 |---|---|---|---|---|
@@ -195,5 +194,4 @@
 | `Source/UI/UIManager.cpp` | 버튼 배치(BUG-06), 패널 불투명(BUG-07), 글꼴 대체(BUG-09) |
 | `Source/App.cpp` | 버튼을 뗀 위치까지 선에 추가(BUG-10) |
 | `Samples/` | 확인용 그림 데이터와 기대 화면 |
-| `Tests/UnitTests.cpp`, `Tests/UnitTests.vcxproj`, `BlackboardProj.sln` | 단위 테스트 프로젝트 추가 |
-| `Tests/E2E/e2e_wine.py` | E2E 테스트 스크립트 추가 |
+| `Tests/` (QA 후 삭제) | 단위 테스트 프로젝트, E2E 테스트 스크립트 |
