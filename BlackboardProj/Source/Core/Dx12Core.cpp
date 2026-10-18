@@ -1,5 +1,8 @@
 #include "Dx12Core.h"
 
+#include <cstdio>
+#include <d3d12sdklayers.h>   // ID3D12Debug (디버그 레이어)
+
 bool Dx12Core::Initialize(HWND hwnd, UINT width, UINT height)
 {
     m_width  = width;
@@ -163,7 +166,7 @@ ID3D12GraphicsCommandList* Dx12Core::BeginFrame(const float clearColor[4])
     return m_commandList.Get();
 }
 
-void Dx12Core::EndFrame()
+bool Dx12Core::EndFrame()
 {
     ID3D12Resource* backBuffer = m_renderTargets[m_frameIndex].Get();
     bool readPixel = m_pixelReadRequested;
@@ -202,7 +205,16 @@ void Dx12Core::EndFrame()
     ID3D12CommandList* lists[] = { m_commandList.Get() };
     m_commandQueue->ExecuteCommandLists(1, lists);
 
-    m_swapChain->Present(1, 0);   // VSync on
+    HRESULT hr = m_swapChain->Present(1, 0);   // VSync on
+    if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET)
+    {
+        // 디버깅용: 장치가 제거된 이유를 출력 창에 남긴다.
+        char message[128];
+        snprintf(message, sizeof(message), "[Dx12Core] Present 실패 0x%08X, 장치 제거 원인 0x%08X\n",
+                 (unsigned)hr, (unsigned)m_device->GetDeviceRemovedReason());
+        OutputDebugStringA(message);
+        return false;
+    }
 
     // 가장 단순한 동기화 방식: 매 프레임 GPU가 끝날 때까지 기다린다.
     WaitForGpu();
@@ -223,6 +235,7 @@ void Dx12Core::EndFrame()
         }
         m_pixelReadRequested = false;
     }
+    return true;
 }
 
 void Dx12Core::WaitForGpu()

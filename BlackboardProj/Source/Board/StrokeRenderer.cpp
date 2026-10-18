@@ -11,6 +11,7 @@ namespace
 cbuffer ScreenConstants : register(b0)
 {
     float2 gScreenSize;
+    float2 gPadding;     // 상수 버퍼는 16바이트 단위라서 루트 상수 4개와 크기를 맞춘다
 };
 
 struct VSInput
@@ -71,12 +72,13 @@ bool StrokeRenderer::Initialize(ID3D12Device* device, DXGI_FORMAT renderTargetFo
 
 bool StrokeRenderer::CreatePipeline(DXGI_FORMAT renderTargetFormat)
 {
-    // 루트 시그니처: 32비트 상수 2개(화면 너비, 높이)만 사용한다.
+    // 루트 시그니처: 32비트 상수 4개(화면 너비, 높이, 패딩 2개)만 사용한다.
+    // 셰이더의 cbuffer는 16바이트(상수 4개) 단위로 잡히므로 2개만 선언하면 크기가 맞지 않는다.
     D3D12_ROOT_PARAMETER rootParam = {};
     rootParam.ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     rootParam.Constants.ShaderRegister = 0;
     rootParam.Constants.RegisterSpace  = 0;
-    rootParam.Constants.Num32BitValues = 2;
+    rootParam.Constants.Num32BitValues = 4;
     rootParam.ShaderVisibility         = D3D12_SHADER_VISIBILITY_VERTEX;
 
     D3D12_ROOT_SIGNATURE_DESC rootDesc = {};
@@ -165,7 +167,6 @@ bool StrokeRenderer::EnsureVertexBuffer(size_t vertexCount)
     D3D12_RANGE noRead = { 0, 0 };
     m_vertexBuffer->Map(0, &noRead, reinterpret_cast<void**>(&m_mappedVertices));
     m_vertexCapacity = newCapacity;
-    m_builtVersion   = 0xFFFFFFFF;   // 새 버퍼에 다시 복사하도록
     return true;
 }
 
@@ -212,48 +213,77 @@ void StrokeRenderer::AddSegment(Point2 p0, Point2 p1, float radius, const Color&
     AddVertex(p0.x - nx, p0.y - ny, color);
 }
 
-void StrokeRenderer::BuildVertices(const Blackboard& board)
+void StrokeRenderer::AddStroke(const Stroke& stroke, const Color& background)
 {
-    m_vertices.clear();
-    Color background = board.GetBackgroundColor();
+    const Color& color  = stroke.isEraser ? background : stroke.color;
+    float        radius = stroke.width * 0.5f;
+
+    for (size_t i = 0; i < stroke.points.size(); ++i)
+    {
+        AddCircle(stroke.points[i], radius, color);
+        if (i > 0)
+            AddSegment(stroke.points[i - 1], stroke.points[i], radius, color);
+    }
+}
+
+size_t StrokeRenderer::UpdateVertices(const Blackboard& board)
+{
+    const std::vector<Stroke>& strokes = board.GetStrokes();
+
+    // 그리는 중에는 마지막 선만 길어지거나 새 선이 뒤에 붙는다.
+    // 그런 경우엔 이전 선들의 정점은 그대로 두고 마지막 선부터 다시 만든다.
+    // (전체 지우기/불러오기/배경 변경이면 처음부터 다시 만든다)
+    size_t firstStroke = 0;
+    if (board.GetResetVersion() == m_builtResetVersion && !m_strokeStarts.empty() &&
+        strokes.size() >= m_strokeStarts.size())
+        firstStroke = m_strokeStarts.size() - 1;
+
+    m_vertices.resize(firstStroke < m_strokeStarts.size() ? m_strokeStarts[firstStroke] : 0);
+    m_strokeStarts.resize(firstStroke);
 
     // 그린 순서대로 쌓이므로 나중 선(지우개 포함)이 앞의 선을 덮는다.
-    for (const Stroke& stroke : board.GetStrokes())
+    Color background = board.GetBackgroundColor();
+    for (size_t i = firstStroke; i < strokes.size(); ++i)
     {
-        const Color& color  = stroke.isEraser ? background : stroke.color;
-        float        radius = stroke.width * 0.5f;
-
-        for (size_t i = 0; i < stroke.points.size(); ++i)
-        {
-            AddCircle(stroke.points[i], radius, color);
-            if (i > 0)
-                AddSegment(stroke.points[i - 1], stroke.points[i], radius, color);
-        }
+        m_strokeStarts.push_back(m_vertices.size());
+        AddStroke(strokes[i], background);
     }
+
+    m_builtVersion      = board.GetVersion();
+    m_builtResetVersion = board.GetResetVersion();
+    return firstStroke < m_strokeStarts.size() ? m_strokeStarts[firstStroke] : m_vertices.size();
 }
 
 void StrokeRenderer::Draw(ID3D12GraphicsCommandList* commandList, const Blackboard& board,
                           float screenWidth, float screenHeight)
 {
-    // 칠판 데이터가 바뀌었을 때만 정점을 다시 만든다.
+    // 칠판 데이터가 바뀌었을 때만 정점을 다시 만들고, 바뀐 부분만 GPU 버퍼로 복사한다.
     if (board.GetVersion() != m_builtVersion)
     {
-        BuildVertices(board);
-        if (!EnsureVertexBuffer(m_vertices.size()))
-            return;
-        if (!m_vertices.empty())
-            std::memcpy(m_mappedVertices, m_vertices.data(), m_vertices.size() * sizeof(Vertex));
-        m_builtVersion = board.GetVersion();
+        size_t firstChanged = UpdateVertices(board);
+        if (m_vertices.size() > m_vertexCapacity)
+        {
+            if (!EnsureVertexBuffer(m_vertices.size()))
+            {
+                m_builtResetVersion = 0xFFFFFFFF;   // 다음 프레임에 처음부터 다시 시도
+                m_builtVersion      = 0xFFFFFFFF;
+                return;
+            }
+            firstChanged = 0;   // 새 버퍼에는 전부 복사
+        }
+        if (m_vertices.size() > firstChanged)
+            std::memcpy(m_mappedVertices + firstChanged, m_vertices.data() + firstChanged,
+                        (m_vertices.size() - firstChanged) * sizeof(Vertex));
     }
 
-    if (m_vertices.empty())
+    if (m_vertices.empty() || m_vertices.size() > m_vertexCapacity)
         return;
 
-    float screenSize[2] = { screenWidth, screenHeight };
+    float screenConstants[4] = { screenWidth, screenHeight, 0.0f, 0.0f };
 
     commandList->SetGraphicsRootSignature(m_rootSignature.Get());
     commandList->SetPipelineState(m_pipelineState.Get());
-    commandList->SetGraphicsRoot32BitConstants(0, 2, screenSize, 0);
+    commandList->SetGraphicsRoot32BitConstants(0, 4, screenConstants, 0);
 
     D3D12_VERTEX_BUFFER_VIEW vbView = {};
     vbView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();

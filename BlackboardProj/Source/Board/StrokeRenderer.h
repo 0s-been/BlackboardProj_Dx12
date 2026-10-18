@@ -18,6 +18,8 @@ public:
     void Draw(ID3D12GraphicsCommandList* commandList, const Blackboard& board, float screenWidth, float screenHeight);
 
 private:
+    friend struct StrokeRendererTestAccess;   // 단위 테스트에서 정점 생성 결과를 확인하기 위함
+
     struct Vertex
     {
         float x, y;         // 화면 픽셀 좌표
@@ -26,10 +28,12 @@ private:
 
     bool CreatePipeline(DXGI_FORMAT renderTargetFormat);
     bool EnsureVertexBuffer(size_t vertexCount);
-    void BuildVertices(const Blackboard& board);
-    void AddCircle(Point2 center, float radius, const Color& color);
-    void AddSegment(Point2 p0, Point2 p1, float radius, const Color& color);
-    void AddVertex(float x, float y, const Color& color);
+    // 바뀐 부분의 정점만 다시 만들고, 다시 만든 첫 정점의 위치를 반환한다.
+    size_t UpdateVertices(const Blackboard& board);
+    void   AddStroke(const Stroke& stroke, const Color& background);
+    void   AddCircle(Point2 center, float radius, const Color& color);
+    void   AddSegment(Point2 p0, Point2 p1, float radius, const Color& color);
+    void   AddVertex(float x, float y, const Color& color);
 
     ID3D12Device*               m_device = nullptr;
     ComPtr<ID3D12RootSignature> m_rootSignature;
@@ -41,5 +45,7 @@ private:
     size_t                 m_vertexCapacity = 0;
 
     std::vector<Vertex> m_vertices;
-    unsigned int        m_builtVersion = 0xFFFFFFFF;
+    std::vector<size_t> m_strokeStarts;   // 선마다 m_vertices 안에서 시작하는 위치
+    unsigned int        m_builtVersion      = 0xFFFFFFFF;
+    unsigned int        m_builtResetVersion = 0xFFFFFFFF;
 };

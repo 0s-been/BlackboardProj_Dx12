@@ -50,13 +50,17 @@ public:
 
     // 데이터가 바뀔 때마다 증가한다. 렌더러가 정점을 다시 만들지 판단할 때 사용.
     unsigned int GetVersion() const { return m_version; }
+    // 선 추가/연장이 아닌 변경(전체 지우기, 불러오기, 배경 변경)이 있을 때만 증가한다.
+    // 이 값이 그대로면 렌더러는 마지막 선부터만 다시 만들면 된다.
+    unsigned int GetResetVersion() const { return m_resetVersion; }
 
     bool SaveToFile(const std::wstring& path) const;
     bool LoadFromFile(const std::wstring& path);
 
 private:
     std::vector<Stroke> m_strokes;
-    BoardBackground     m_background = BoardBackground::Green;
-    bool                m_drawing    = false;
-    unsigned int        m_version    = 0;
+    BoardBackground     m_background   = BoardBackground::Green;
+    bool                m_drawing      = false;
+    unsigned int        m_version      = 0;
+    unsigned int        m_resetVersion = 0;
 };

@@ -32,7 +32,8 @@ UI 배치는 코드를 쓰기 전에 시안 두 개를 만들어 검토를 받�
 │┌──────────────┐                                              │
 ││ 도구       < │                                              │
 ││ 파일         │                                              │
-││ [저장][불러오기][전체 지우기]                                 │
+││ [저장][불러오기]                                              │
+││ [  전체 지우기  ]                                              │
 ││ 도구         │                  칠판 영역                     │
 ││ [펜][지우개][스포이드]           (창 전체, 패널 뒤까지)          │
 ││ 기본 색상    │                                              │
@@ -111,7 +112,7 @@ classDiagram
         +Initialize(hwnd, width, height) bool
         +Resize(width, height)
         +BeginFrame(clearColor) ID3D12GraphicsCommandList*
-        +EndFrame()
+        +EndFrame() bool
         +WaitForGpu()
         +RequestPixelRead(x, y)
         +PopPixelRead(outRgb) bool
@@ -130,6 +131,7 @@ classDiagram
         +GetBackgroundColor() Color
         +GetStrokes() vector~Stroke~
         +GetVersion() uint
+        +GetResetVersion() uint
         +SaveToFile(path) bool
         +LoadFromFile(path) bool
     }
@@ -139,10 +141,13 @@ classDiagram
         -ID3D12PipelineState m_pipelineState
         -ID3D12Resource m_vertexBuffer
         -vector~Vertex~ m_vertices
+        -vector~size_t~ m_strokeStarts
         -uint m_builtVersion
+        -uint m_builtResetVersion
         +Initialize(device, rtvFormat) bool
         +Draw(commandList, board, width, height)
-        -BuildVertices(board)
+        -UpdateVertices(board) size_t
+        -AddStroke(stroke, background)
         -AddCircle(center, radius, color)
         -AddSegment(p0, p1, radius, color)
         -EnsureVertexBuffer(count) bool
@@ -269,8 +274,8 @@ sequenceDiagram
         SR->>Board: GetVersion()
         alt 버전이 바뀜
             SR->>Board: GetStrokes()
-            SR->>SR: BuildVertices() (원 + 사각형)
-            SR->>SR: 업로드 버퍼로 memcpy
+            SR->>SR: UpdateVertices() — 마지막 선만 다시 만듦 (원 + 사각형)
+            SR->>SR: 바뀐 부분만 업로드 버퍼로 memcpy
         end
         SR->>GPU: DrawInstanced(정점 수)
     end
@@ -366,11 +371,11 @@ sequenceDiagram
 - **선 → 삼각형 변환(테셀레이션)**: GPU는 굵은 선을 직접 그리지 못하므로 CPU에서 삼각형으로 만듭니다.
   - 선분: 진행 방향에 수직인 법선 벡터 `(-dy, dx)/길이 × 반지름`으로 양쪽을 벌려 사각형(삼각형 2개)을 만듭니다.
   - 각 점: 반지름만큼의 원(8~32조각)을 그려 꺾이는 부분과 선의 끝을 둥글게 만듭니다(round join / round cap).
-- **셰이더**: HLSL 소스를 문자열로 넣고 실행할 때 `D3DCompile`로 컴파일합니다. 정점은 픽셀 좌표로 넘기고, 정점 셰이더가 **루트 상수(32비트 상수 2개 = 화면 크기)**로 나눠 NDC로 바꿉니다. 상수 버퍼나 디스크립터 테이블이 필요 없는 가장 작은 루트 시그니처입니다.
+- **셰이더**: HLSL 소스를 문자열로 넣고 실행할 때 `D3DCompile`로 컴파일합니다. 정점은 픽셀 좌표로 넘기고, 정점 셰이더가 **루트 상수(32비트 상수 4개 = 화면 너비·높이 + 패딩 2개)**로 나눠 NDC로 바꿉니다. 상수 버퍼나 디스크립터 테이블이 필요 없는 가장 작은 루트 시그니처입니다. HLSL의 `cbuffer`는 16바이트(상수 4개) 단위로 크기가 잡히므로, 실제로 쓰는 값은 2개여도 루트 상수는 4개로 선언해야 셰이더와 크기가 맞습니다(QA 중 검증 레이어로 발견해 수정).
 - **정점 버퍼**: 업로드 힙 버퍼를 한 번 `Map`해 두고 계속 씁니다. 공간이 모자라면 2배 크기로 다시 만듭니다.
-- **버전 기반 캐싱**: `Blackboard`는 데이터가 바뀔 때마다 `m_version`을 올립니다. `StrokeRenderer`는 버전이 바뀐 프레임에만 정점을 다시 만들고, 바뀌지 않은 프레임에는 기존 버퍼를 그대로 그립니다.
+- **버전 기반 캐싱 + 부분 갱신**: `Blackboard`는 데이터가 바뀔 때마다 `m_version`을, 전체 지우기·불러오기·배경 변경처럼 처음부터 다시 그려야 할 때는 `m_resetVersion`도 올립니다. `StrokeRenderer`는 버전이 바뀐 프레임에만 정점을 갱신하는데, `m_resetVersion`이 그대로면 그리는 중인 **마지막 선만** 다시 만들고 바뀐 부분만 GPU 버퍼로 복사합니다. (점 10만 개가 있는 칠판에서 그리는 중 프레임당 갱신 비용: 약 171ms → 0.04ms)
 - **지우개**: 지우개도 선이며, `isEraser`인 선은 그릴 때 **현재 배경색**을 씁니다. 그래서 배경색을 바꾸면 지운 자국도 새 배경색을 따라가 항상 자연스럽게 지워진 것처럼 보입니다. 그리는 순서대로 덮어쓰므로 지우개 다음에 그린 선은 다시 보입니다.
-- **파일 형식(.board)**: 매직 넘버 `BBRD` + 버전 + 배경 + 선 개수 + 선 데이터로 된 단순한 바이너리입니다. 불러올 때는 개수 상한과 읽기 실패를 검사하고, 임시 버퍼에 다 읽은 뒤에만 교체해서 잘못된 파일이 기존 그림을 망가뜨리지 않게 했습니다.
+- **파일 형식(.board)**: 매직 넘버 `BBRD` + 버전 + 배경 + 선 개수 + 선 데이터로 된 단순한 바이너리입니다. 불러올 때는 선/점 개수를 실제 남은 파일 크기와 비교하고(손상된 개수로 큰 메모리를 잡지 않도록), 색·굵기·좌표가 유한한 정상 범위인지 검사합니다. 임시 버퍼에 다 읽은 뒤에만 교체해서 잘못된 파일이 기존 그림을 망가뜨리지 않게 했습니다.
 
 ### 6.3 UI (ImGui)
 
@@ -395,12 +400,12 @@ sequenceDiagram
 
 1. Win32 메시지 처리 (입력은 ImGui Win32 백엔드에 먼저 전달)
 2. `UIManager::NewFrame()`
-3. `App::HandleBoardInput()`: 선 시작/계속/끝, 휠로 굵기 조절, 스포이드 요청
+3. `App::HandleBoardInput()`: 선 시작/계속/끝, 휠로 굵기 조절(휠 양을 누적해 1칸 단위로 반영), 스포이드 요청
 4. `UIManager::Build()`: 패널, 상태 표시줄, 커서 미리보기
 5. `Dx12Core::BeginFrame()`: 배경색으로 지우기
 6. `StrokeRenderer::Draw()`: 선
 7. `UIManager::Render()`: ImGui
-8. `Dx12Core::EndFrame()`: (스포이드 복사) → 실행 → Present → GPU 대기
+8. `Dx12Core::EndFrame()`: (스포이드 복사) → 실행 → Present(장치 제거 오류 검사) → GPU 대기
 9. 스포이드 결과 반영
 
 ## 8. 한계와 개선할 수 있는 점
@@ -408,13 +413,14 @@ sequenceDiagram
 과제용 단일 프로젝트라서 아래 항목은 일부러 넣지 않았습니다.
 
 - 매 프레임 GPU를 기다리는 동기화 → 프레임 리소스를 여러 개 두면 CPU와 GPU가 겹쳐서 일할 수 있습니다.
-- 선이 아주 많아지면 그리는 동안 매 프레임 정점 전체를 다시 만듭니다 → 마지막 선만 추가하거나, 렌더 타깃 텍스처에 누적해서 그리는 방식으로 줄일 수 있습니다.
+- 전체 지우기/불러오기/배경 변경 때는 정점 전체를 다시 만듭니다(점 10만 개 기준 약 0.17초). 더 줄이려면 렌더 타깃 텍스처에 누적해서 그리는 방식을 쓸 수 있습니다.
 - 안티에일리어싱 없음 → MSAA나 셰이더에서 가장자리 알파 처리를 넣을 수 있습니다.
 - 실행 취소(Undo), 고해상도(DPI) 대응 없음.
+- 창 테두리를 끌어 크기를 바꾸는 동안에는 Windows가 메시지 루프를 잡고 있어 새 프레임이 그려지지 않습니다(놓으면 정상).
 
 ## 9. 빌드 확인
 
 - Visual Studio 2022 프로젝트(`BlackboardProj.sln`, x64 Debug/Release)로 구성했습니다.
 - 작성 환경(Linux)에서 MinGW-w64 크로스 컴파일러로 모든 소스를 컴파일·링크해 문법과 링크 오류가 없는 것을 확인했습니다.
-- 저장/불러오기 로직은 별도 테스트로 왕복(저장 → 로드 → 값 비교)과 잘못된 파일 거부를 확인했습니다.
-- 실제 Windows + GPU 환경에서의 실행 확인은 Visual Studio에서 빌드해 진행해야 합니다.
+- 단위 테스트(`Tests/UnitTests.cpp`, 35개)와 화면 조작 E2E 테스트(24개)를 Wine + vkd3d(소프트웨어 Vulkan)에서 실행해 확인했습니다. 자세한 결과는 [QA 보고서](QA_Report.md)에 있습니다.
+- 실제 Windows + GPU 환경에서의 최종 확인은 Visual Studio에서 빌드해 진행해야 합니다.

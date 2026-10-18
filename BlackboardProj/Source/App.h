@@ -29,4 +29,5 @@ private:
     StrokeRenderer m_strokeRenderer;
     UIManager      m_ui;
     ToolState      m_tool;
+    float          m_wheelAccum = 0.0f;   // 아직 반영하지 않은 마우스 휠 양
 };

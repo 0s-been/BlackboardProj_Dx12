@@ -86,6 +86,8 @@ void App::Shutdown()
 
 void App::Frame()
 {
+    if (!IsWindow(m_hwnd))   // 종료 중 (WM_QUIT 처리 전)
+        return;
     if (IsIconic(m_hwnd))   // 최소화 상태에서는 그리지 않는다
     {
         Sleep(10);
@@ -104,7 +106,13 @@ void App::Frame()
     ID3D12GraphicsCommandList* commandList = m_core.BeginFrame(clearColor);
     m_strokeRenderer.Draw(commandList, m_board, (float)m_core.GetWidth(), (float)m_core.GetHeight());
     m_ui.Render(commandList, m_core.GetSrvHeap());
-    m_core.EndFrame();
+    if (!m_core.EndFrame())
+    {
+        // GPU 장치가 제거됨(드라이버 재시작, GPU 오류 등). 원인은 출력 창에 기록된다.
+        MessageBoxW(m_hwnd, L"GPU 장치 오류로 프로그램을 종료합니다.", kWindowTitle, MB_ICONERROR);
+        DestroyWindow(m_hwnd);
+        return;
+    }
 
     // 3) 스포이드 결과가 나왔으면 사용자 색상으로 설정하고 펜으로 전환
     float rgb[3];
@@ -145,10 +153,15 @@ void App::HandleBoardInput()
     if (m_ui.WantsMouse() || !ImGui::IsMousePosValid())
         return;
 
-    // 마우스 휠로 붓 굵기 조절
-    if (io.MouseWheel != 0.0f)
+    // 마우스 휠로 붓 굵기 조절.
+    // 한 프레임에 여러 칸이 들어오거나(빠른 휠) 터치패드처럼 1칸보다 작게 들어올 수 있으므로
+    // 누적해 두었다가 1칸 단위로 반영한다.
+    m_wheelAccum += io.MouseWheel;
+    int steps = (int)m_wheelAccum;
+    if (steps != 0)
     {
-        m_tool.brushSize += (io.MouseWheel > 0.0f) ? 1 : -1;
+        m_wheelAccum -= (float)steps;
+        m_tool.brushSize += steps;
         if (m_tool.brushSize < ToolState::kMinBrushSize) m_tool.brushSize = ToolState::kMinBrushSize;
         if (m_tool.brushSize > ToolState::kMaxBrushSize) m_tool.brushSize = ToolState::kMaxBrushSize;
     }

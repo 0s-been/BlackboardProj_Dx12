@@ -1,5 +1,6 @@
 #include "Blackboard.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -15,7 +16,10 @@ namespace
     //   선마다: float rgba[4], float 굵기, uint8 지우개 여부, uint32 점 개수, float2 점[점 개수]
     const char     kMagic[4]     = { 'B', 'B', 'R', 'D' };
     const uint32_t kFileVersion  = 1;
-    const uint32_t kMaxCount     = 10000000;  // 손상된 파일 방어용
+    const float    kMaxWidth     = 1000.0f;   // 손상된 파일 방어용 (굵기 상한)
+
+    // 선 하나가 차지하는 최소 바이트: 색(16) + 굵기(4) + 지우개(1) + 점 개수(4) + 점 1개(8)
+    const uint64_t kMinStrokeBytes = 33;
 
     // 이전 점과 이 거리(px)보다 가까우면 점을 추가하지 않는다.
     const float kMinPointDistance = 1.5f;
@@ -31,6 +35,26 @@ namespace
     {
         in.read(reinterpret_cast<char*>(&value), sizeof(T));
         return (bool)in;
+    }
+
+    // 파일에서 아직 읽지 않은 바이트 수
+    uint64_t Remaining(std::ifstream& in, uint64_t fileSize)
+    {
+        return fileSize - (uint64_t)in.tellg();
+    }
+
+    bool IsValidStroke(const Stroke& s)
+    {
+        const float c[4] = { s.color.r, s.color.g, s.color.b, s.color.a };
+        for (float v : c)
+            if (!std::isfinite(v) || v < 0.0f || v > 1.0f)
+                return false;
+        if (!std::isfinite(s.width) || s.width <= 0.0f || s.width > kMaxWidth)
+            return false;
+        for (const Point2& p : s.points)
+            if (!std::isfinite(p.x) || !std::isfinite(p.y))
+                return false;
+        return true;
     }
 }
 
@@ -73,12 +97,14 @@ void Blackboard::Clear()
     m_strokes.clear();
     m_drawing = false;
     ++m_version;
+    ++m_resetVersion;
 }
 
 void Blackboard::SetBackground(BoardBackground bg)
 {
     m_background = bg;
-    ++m_version;   // 지우개 선 색도 바뀌므로 다시 그려야 한다
+    ++m_version;        // 지우개 선 색도 바뀌므로 다시 그려야 한다
+    ++m_resetVersion;
 }
 
 Color Blackboard::GetBackgroundColor() const
@@ -120,9 +146,11 @@ bool Blackboard::SaveToFile(const std::wstring& path) const
 
 bool Blackboard::LoadFromFile(const std::wstring& path)
 {
-    std::ifstream in(std::filesystem::path(path), std::ios::binary);
+    std::ifstream in(std::filesystem::path(path), std::ios::binary | std::ios::ate);
     if (!in)
         return false;
+    const uint64_t fileSize = (uint64_t)in.tellg();
+    in.seekg(0);
 
     char     magic[4];
     uint32_t version     = 0;
@@ -136,30 +164,35 @@ bool Blackboard::LoadFromFile(const std::wstring& path)
         return false;
     if (!Read(in, background) || background < 0 || background >= (int32_t)BoardBackground::Count)
         return false;
-    if (!Read(in, strokeCount) || strokeCount > kMaxCount)
+    // 개수는 실제 남은 파일 크기로 검사한다. (손상된 개수로 큰 메모리를 잡지 않도록)
+    if (!Read(in, strokeCount) || strokeCount * kMinStrokeBytes > Remaining(in, fileSize))
         return false;
 
     // 다 읽은 뒤에 교체한다. 중간에 실패하면 기존 그림은 그대로 둔다.
-    std::vector<Stroke> strokes(strokeCount);
-    for (Stroke& stroke : strokes)
+    std::vector<Stroke> strokes;
+    strokes.reserve(strokeCount);
+    for (uint32_t i = 0; i < strokeCount; ++i)
     {
+        Stroke   stroke;
         uint8_t  isEraser   = 0;
         uint32_t pointCount = 0;
         if (!Read(in, stroke.color) || !Read(in, stroke.width) || !Read(in, isEraser) || !Read(in, pointCount))
             return false;
-        if (pointCount == 0 || pointCount > kMaxCount)
+        if (pointCount == 0 || (uint64_t)pointCount * sizeof(Point2) > Remaining(in, fileSize))
             return false;
 
         stroke.isEraser = (isEraser != 0);
         stroke.points.resize(pointCount);
         in.read(reinterpret_cast<char*>(stroke.points.data()), pointCount * sizeof(Point2));
-        if (!in)
+        if (!in || !IsValidStroke(stroke))
             return false;
+        strokes.push_back(std::move(stroke));
     }
 
     m_strokes    = std::move(strokes);
     m_background = (BoardBackground)background;
     m_drawing    = false;
     ++m_version;
+    ++m_resetVersion;
     return true;
 }

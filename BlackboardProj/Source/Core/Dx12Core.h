@@ -22,7 +22,8 @@ public:
     // 현재 백버퍼를 clearColor로 지우고 그리기용 커맨드 리스트를 돌려준다.
     ID3D12GraphicsCommandList* BeginFrame(const float clearColor[4]);
     // 커맨드 리스트를 실행하고 화면에 표시(Present)한 뒤 GPU 작업 완료까지 기다린다.
-    void EndFrame();
+    // GPU 장치가 제거되는 등 계속할 수 없는 오류면 false.
+    bool EndFrame();
     void WaitForGpu();
 
     // 스포이드: 다음 EndFrame에서 (x, y) 픽셀의 색을 백버퍼에서 읽어온다.

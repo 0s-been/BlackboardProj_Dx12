@@ -10,6 +10,12 @@
 
 실행 파일은 `Bin\<구성>\BlackboardProj.exe`에 만들어집니다. 외부 라이브러리는 Dear ImGui(v1.91.9b)뿐이고, `BlackboardProj/External/imgui`에 소스가 들어 있어 따로 설치할 것이 없습니다.
 
+## 테스트
+
+- **단위 테스트**: 솔루션의 `UnitTests` 프로젝트를 시작 프로젝트로 설정하고 실행합니다(칠판 데이터·저장/불러오기·선 정점 생성 35개).
+- **E2E 테스트**: Linux + Wine 환경에서 `python3 Tests/E2E/e2e_wine.py <exe> <결과폴더>` (화면 조작 24개).
+- 결과와 디버깅 지점은 [`Docs/QA_Report.md`](Docs/QA_Report.md)에 정리되어 있습니다.
+
 ## 사용법
 
 | 조작 | 동작 |
@@ -35,5 +41,7 @@ BlackboardProj/
     Board/StrokeRenderer.*      선을 삼각형으로 만들어 그리기
     UI/UIManager.*              ImGui UI (도구 패널, 상태 표시줄)
   External/imgui/               Dear ImGui 소스
+Tests/                          단위 테스트(UnitTests), E2E 테스트 스크립트
 Docs/Report.md                  구현 보고서 (클래스/시퀀스 다이어그램 포함)
+Docs/QA_Report.md               QA 보고서 (테스트 케이스, 결함, 디버깅 지점)
 ```

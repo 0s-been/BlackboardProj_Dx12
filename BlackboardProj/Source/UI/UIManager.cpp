@@ -96,14 +96,23 @@ bool UIManager::Initialize(HWND hwnd, Dx12Core& core)
     io.IniFilename = nullptr;   // 창 위치를 imgui.ini로 저장하지 않는다
 
     ImGui::StyleColorsDark();
+    ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 1.0f;   // 패널 밑의 그림이 비치지 않도록 불투명하게
 
-    // 한글 표시를 위해 Windows 기본 글꼴(맑은 고딕)을 불러온다. 없으면 ImGui 기본 글꼴.
+    // 한글 표시를 위해 Windows 기본 한글 글꼴을 불러온다. (맑은 고딕 -> 굴림 순서)
+    // 둘 다 없으면 ImGui 기본 글꼴을 쓰는데, 이때 한글은 '?'로 보인다.
+    const wchar_t* fontPathsW[] = { L"C:\\Windows\\Fonts\\malgun.ttf", L"C:\\Windows\\Fonts\\gulim.ttc" };
+    const char*    fontPaths[]  = { "C:\\Windows\\Fonts\\malgun.ttf", "C:\\Windows\\Fonts\\gulim.ttc" };
     ImFont* font = nullptr;
-    if (GetFileAttributesW(L"C:\\Windows\\Fonts\\malgun.ttf") != INVALID_FILE_ATTRIBUTES)
-        font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\malgun.ttf", 17.0f, nullptr,
-                                            io.Fonts->GetGlyphRangesKorean());
+    for (int i = 0; i < 2 && !font; ++i)
+    {
+        if (GetFileAttributesW(fontPathsW[i]) != INVALID_FILE_ATTRIBUTES)
+            font = io.Fonts->AddFontFromFileTTF(fontPaths[i], 17.0f, nullptr, io.Fonts->GetGlyphRangesKorean());
+    }
     if (!font)
+    {
+        OutputDebugStringA("[UIManager] 한글 글꼴을 찾지 못해 기본 글꼴을 사용합니다.\n");
         io.Fonts->AddFontDefault();
+    }
 
     if (!ImGui_ImplWin32_Init(hwnd))
         return false;
@@ -179,14 +188,14 @@ void UIManager::BuildToolPanel(ToolState& tool, Blackboard& board)
 
     // 파일
     ImGui::TextDisabled("파일");
+    float half  = (fullWidth - spacing) / 2.0f;
     float third = (fullWidth - spacing * 2.0f) / 3.0f;
-    if (ImGui::Button("저장", ImVec2(third, 0.0f)))
+    if (ImGui::Button("저장", ImVec2(half, 0.0f)))
         SaveBoard(board);
     ImGui::SameLine();
-    if (ImGui::Button("불러오기", ImVec2(third, 0.0f)))
+    if (ImGui::Button("불러오기", ImVec2(half, 0.0f)))
         LoadBoard(board);
-    ImGui::SameLine();
-    if (ImGui::Button("전체 지우기", ImVec2(third, 0.0f)))
+    if (ImGui::Button("전체 지우기", ImVec2(fullWidth, 0.0f)))   // 세 칸에 넣으면 글자가 잘려서 한 줄 전체 사용
         board.Clear();
 
     // 도구
